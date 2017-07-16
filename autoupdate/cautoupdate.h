@@ -13,7 +13,10 @@ class CAutoUpdate;
 struct stSettings {
     QString strUpdateDir; //更新目录
     QString strUpdateUrl; //更新网址
-    QStringList strDirWhiteList; //白名单目录
+    QString strKillExe;   //要杀死的进程
+//    QStringList strNeedUpdateFileList; //需要更新的文件过滤器
+    QStringList strNotUpdateDirList; //不更新的目录
+    QStringList strNotUpdateFileList; //不更新的文件
 };
 
 typedef std::map<QString, QString> QQMAP;
@@ -37,6 +40,10 @@ private:
     bool getRemoteManifest(QQMAP& mapManifest);
     void compareLocalRemoteManifest(QQMAP& local, QQMAP& remote, FileList& fileList);
     bool downloadDiffFiles(const FileList& fileList);
+    QString removeSetComment(const QString& str);
+    bool canUpdate();
+    void removeAllFiles(const QString& strPath);
+    void copyAllFiles(const QString& strSrcPath, const QString& strDstPath);
 
 private slots:
     void slotTimeout();

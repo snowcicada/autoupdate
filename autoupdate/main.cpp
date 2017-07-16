@@ -14,9 +14,16 @@ int main(int argc, char *argv[])
     QTextCodec::setCodecForTr(QTextCodec::codecForLocale());
 
     CAutoUpdate w;
-    w.show();
 
-    CCurl::GlobalCleanup();
-    
-    return a.exec();
+    //自动更新
+    if (true) {
+        w.show();
+
+        CCurl::GlobalCleanup();
+
+        return a.exec();
+    }
+
+    //生成project.manifest
+    return 1;
 }

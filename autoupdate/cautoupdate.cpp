@@ -7,6 +7,7 @@
 #define APP_TITLE           "自动更新"
 #define APP_NAME            "autoupdate.exe"
 #define PROJECT_MANIFEST    "project.manifest"
+#define TMP_DIR             "tmp"
 
 CAutoUpdate::CAutoUpdate(QWidget *parent) :
     QDialog(parent),
@@ -51,28 +52,55 @@ void CAutoUpdate::readSettings()
         set.setValue(strKey, m_settings.strUpdateDir);
     }
 
-    strKey = "update/dir_whitelist";
+    strKey = "update/not_update_dirs";
     if (set.contains(strKey)) {
         strTmp = set.value(strKey).toString();
-        m_settings.strDirWhiteList = strTmp.split(';');
+        m_settings.strNotUpdateDirList = strTmp.split(';');
+    } else {
+        set.setValue(strKey, "id_logs");
+    }
+
+    strKey = "update/not_update_files";
+    if (set.contains(strKey)) {
+        strTmp = set.value(strKey).toString();
+        m_settings.strNotUpdateFileList = strTmp.split(';');
     } else {
         set.setValue(strKey, "");
     }
+
+//    strKey = "update/need_update_files";
+//    if (set.contains(strKey)) {
+//        strTmp = set.value(strKey).toString();
+//        m_settings.strNeedUpdateFileList = strTmp.split(';');
+//    } else {
+//        strTmp = "*.exe;*.dll;*.ini;*.wav;*.bmp;*.pdb;*.wlt;WZ.txt;";
+//        set.setValue(strKey, strTmp);
+//        m_settings.strNeedUpdateFileList = strTmp.split(';');
+//    }
 
     strKey = "update/update_url";
     if (set.contains(strKey)) {
         m_settings.strUpdateUrl = set.value(strKey).toString();
     } else {
+        m_settings.strUpdateUrl = "";
         set.setValue(strKey, "http://www.abc.com");
         QMessageBox::warning(this, "提示", "请配置更新地址update_url！");
         return;
+    }
+
+    //隐含配置
+    strKey = "update/kill_exe";
+    if (set.contains(strKey)) {
+        m_settings.strKillExe = set.value(strKey).toString();
+    } else {
+        m_settings.strKillExe = "";
     }
 }
 
 bool CAutoUpdate::createLocalManifest(QQMAP &mapManifest, const QString &strPath)
 {
     m_fileInfoList.clear();
-    m_mapLocalManifest.clear();
+    mapManifest.clear();
 
     searchFile(m_fileInfoList, strPath);
 
@@ -84,11 +112,11 @@ bool CAutoUpdate::createLocalManifest(QQMAP &mapManifest, const QString &strPath
             strMd5 = QCryptographicHash::hash(file.readAll(), QCryptographicHash::Md5).toHex();
         } else {
             qDebug() << "读取文件失败!";
-            m_mapLocalManifest.clear();
+            mapManifest.clear();
             return false;
         }
         file.close();
-        m_mapLocalManifest[strFileName] = strMd5;
+        mapManifest[strFileName] = strMd5;
         QCoreApplication::processEvents();
 //        qDebug() << strFileName << " -> " << strMd5;
     }
@@ -99,7 +127,7 @@ bool CAutoUpdate::createLocalManifest(QQMAP &mapManifest, const QString &strPath
 bool CAutoUpdate::createRemoteManifest(QQMAP &mapManifest, const QString &strPath)
 {
     m_fileInfoList.clear();
-    m_mapLocalManifest.clear();
+    mapManifest.clear();
 
     searchFile(m_fileInfoList, strPath);
 
@@ -112,11 +140,11 @@ bool CAutoUpdate::createRemoteManifest(QQMAP &mapManifest, const QString &strPat
             strMd5 = QCryptographicHash::hash(file.readAll(), QCryptographicHash::Md5).toHex();
         } else {
             qDebug() << "读取文件失败!";
-            m_mapLocalManifest.clear();
+            mapManifest.clear();
             return false;
         }
         file.close();
-        m_mapLocalManifest[strFileName] = strMd5;
+        mapManifest[strFileName] = strMd5;
         jsonVal[strFileName.toStdString()] = strMd5.toStdString();
         QCoreApplication::processEvents();
     }
@@ -136,11 +164,13 @@ void CAutoUpdate::searchFile(QFileInfoList &infoList, const QString &strPath)
     QDir dir(strPath);
     QFileInfoList fileList = dir.entryInfoList();
     foreach (QFileInfo info, fileList) {
-        if (info.isFile()) {
+        if (strCurrentPath == info.fileName() || info.fileName() == "." || info.fileName() == "..") {
+            continue;
+        }
+
+        if (info.isFile() && m_settings.strNotUpdateFileList.indexOf(info.fileName()) == -1) {
             infoList.append(info);
-        } else if (info.isDir() && info.fileName() != "." &&
-                   info.fileName() != ".." && strCurrentPath != info.fileName() &&
-                   m_settings.strDirWhiteList.indexOf(info.fileName()) == -1) {
+        } else if (info.isDir() && m_settings.strNotUpdateDirList.indexOf(info.fileName()) == -1) {
             searchFile(infoList, info.filePath());
         }
     }
@@ -192,13 +222,13 @@ void CAutoUpdate::compareLocalRemoteManifest(QQMAP &local, QQMAP &remote, FileLi
 
 bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
 {
-    static const QString s_tmpDir = "tmp";
-    QString strUrl;
+    const QString s_tmpDir = TMP_DIR;
+    QString strUrl, strTmp;
 
     //每次重新创建目录
     QDir dir = QDir::current();
     if (dir.exists(s_tmpDir)) {
-        dir.remove(s_tmpDir);
+        removeAllFiles(s_tmpDir);
     }
     dir.mkdir(s_tmpDir);
 
@@ -219,21 +249,22 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
             strPath = "";
         }
         if (!strPath.isEmpty()) {
-            dir.mkpath(strPath);
+            dir.mkpath(s_tmpDir + "/" + strPath);
+//            qDebug() << s_tmpDir + "/" + strPath;
         }
 //        qDebug() << "name=" << strName << " path=" << strPath;
 
         ui->labelFileName->setText(strFileName);
 
         //下载
-        strFileName = "DG2013_Final_1021E.exe";
-        QFile file(s_tmpDir + "/" + strFileName);
+        strTmp = s_tmpDir + "/" + strFileName;
+        QFile file(strTmp);
         if (!file.open(QFile::WriteOnly)) {
+            qDebug() << strTmp;
             return false;
         }
         strUrl = m_settings.strUpdateUrl + "/" + strFileName;
         m_curl.Get(strUrl, &file);
-        qDebug() << strUrl;
         file.close();
 
         ui->progressBar->setValue(++count);
@@ -243,13 +274,66 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
     return true;
 }
 
+QString CAutoUpdate::removeSetComment(const QString &str)
+{
+    int index = str.indexOf('#');
+    return str.left(index);
+}
+
+bool CAutoUpdate::canUpdate()
+{
+    if (m_settings.strUpdateUrl.isEmpty()) {
+        QMessageBox::warning(this, "提示", "请设置更新地址update_url");
+        return false;
+    }
+
+    return true;
+}
+
+void CAutoUpdate::removeAllFiles(const QString &strPath)
+{
+    QDir dir(strPath);
+    QFileInfoList fileInfoList = dir.entryInfoList();
+    foreach (QFileInfo info, fileInfoList) {
+        if (info.fileName() == "." || info.fileName() == "..") {
+            continue;
+        }
+
+        if (info.isFile()) {
+            QFile::remove(info.filePath());
+        } else if (info.isDir()) {
+            removeAllFiles(info.filePath());
+        }
+    }
+}
+
+void CAutoUpdate::copyAllFiles(const QString &strSrcPath, const QString &strDstPath)
+{
+//    QDir dir(strPath);
+//    QFileInfoList fileInfoList = dir.entryInfoList();
+//    foreach (QFileInfo info, fileInfoList) {
+//        if (info.fileName() == "." || info.fileName() == "..") {
+//            continue;
+//        }
+
+//        if (info.isFile()) {
+//            QFile::remove(info.filePath());
+//        } else if (info.isDir()) {
+//            removeAllFiles(info.filePath());
+//        }
+//    }
+}
+
 void CAutoUpdate::slotTimeout()
 {
+    if (!canUpdate()) {
+        return;
+    }
+
     QString strTmp;
 
     //获取本地软件信息
     createLocalManifest(m_mapLocalManifest, m_settings.strUpdateDir);
-    createRemoteManifest(m_mapLocalManifest, m_settings.strUpdateDir);
 
     if (!getRemoteManifest(m_mapRemoteManifest)) {
         qDebug() << "获取远端manifest失败";
@@ -272,7 +356,11 @@ void CAutoUpdate::slotTimeout()
     }
 
     //杀死进程
-    strTmp = "taskkill /im FaceHuaMaWT* /f";
+    if (m_settings.strKillExe.isEmpty()) {
+        strTmp = "taskkill /im FaceHuaMaWT* /f";
+    } else {
+        strTmp = tr("taskkill /im %1* /f").arg(m_settings.strKillExe);
+    }
     QProcess::execute(strTmp);
 
     //拷贝更新文件
