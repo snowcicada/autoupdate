@@ -4,7 +4,7 @@
 #include <QCryptographicHash>
 
 #define SET_UPDATE          "config.ini"
-#define APP_TITLE           "华码科技自动更新"
+#define APP_TITLE           "华码科技自动更新 v1.0"
 #define APP_NAME            "autoupdate.exe"
 #define PROJECT_MANIFEST    "project.manifest"
 #define TMP_DIR             "tmp"
