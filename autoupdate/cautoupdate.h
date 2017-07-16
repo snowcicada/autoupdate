@@ -16,6 +16,9 @@ struct stSettings {
     QStringList strDirWhiteList; //°×Ãûµ¥Ä¿Â¼
 };
 
+typedef std::map<QString, QString> QQMAP;
+typedef std::list<QString> FileList;
+
 class CAutoUpdate : public QDialog
 {
     Q_OBJECT
@@ -27,10 +30,13 @@ public:
 private:
     void initUi();
     void readSettings();
-    bool createLocalManifest(const QString& strPath);
-    bool createRemoteManifest(const QString& strPath);
+    bool createLocalManifest(QQMAP& mapManifest, const QString& strPath);
+    bool createRemoteManifest(QQMAP& mapManifest, const QString& strPath);
     void searchFile(QFileInfoList &infoList, const QString& strPath);
     QString getCurrentDirName();
+    bool getRemoteManifest(QQMAP& mapManifest);
+    void compareLocalRemoteManifest(QQMAP& local, QQMAP& remote, FileList& fileList);
+    bool downloadDiffFiles(const FileList& fileList);
 
 private slots:
     void slotTimeout();
@@ -40,7 +46,8 @@ private:
 
     stSettings m_settings;
     QFileInfoList m_fileInfoList;
-    std::map<QString, QString> m_mapLocalManifest;
+    QQMAP m_mapLocalManifest;
+    QQMAP m_mapRemoteManifest;
     CCurl m_curl;
 };
 #endif // CAUTOUPDATE_H

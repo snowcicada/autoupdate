@@ -17,7 +17,14 @@ CAutoUpdate::CAutoUpdate(QWidget *parent) :
     initUi();
     readSettings();
 
-    QTimer::singleShot(1000, this, SLOT(slotTimeout()));
+    FileList fileList;
+    fileList.push_back("abc");
+    fileList.push_back("abc/123.txt");
+    fileList.push_back("abc/bcd/233");
+    fileList.push_back("abc/bcd/ddd/fff/123.zip");
+    downloadDiffFiles(fileList);
+
+//    QTimer::singleShot(1000, this, SLOT(slotTimeout()));
 }
 
 CAutoUpdate::~CAutoUpdate()
@@ -59,12 +66,12 @@ void CAutoUpdate::readSettings()
         m_settings.strUpdateUrl = set.value(strKey).toString();
     } else {
         set.setValue(strKey, "http://www.abc.com");
-        QMessageBox::warning(this, "提示", "请配置更新地址！");
+        QMessageBox::warning(this, "提示", "请配置更新地址update_url！");
         return;
     }
 }
 
-bool CAutoUpdate::createLocalManifest(const QString &strPath)
+bool CAutoUpdate::createLocalManifest(QQMAP &mapManifest, const QString &strPath)
 {
     m_fileInfoList.clear();
     m_mapLocalManifest.clear();
@@ -91,7 +98,7 @@ bool CAutoUpdate::createLocalManifest(const QString &strPath)
     return true;
 }
 
-bool CAutoUpdate::createRemoteManifest(const QString &strPath)
+bool CAutoUpdate::createRemoteManifest(QQMAP &mapManifest, const QString &strPath)
 {
     m_fileInfoList.clear();
     m_mapLocalManifest.clear();
@@ -151,26 +158,97 @@ QString CAutoUpdate::getCurrentDirName()
     return "";
 }
 
-void CAutoUpdate::slotTimeout()
+bool CAutoUpdate::getRemoteManifest(QQMAP &mapManifest)
 {
-    //获取本地软件信息
-    createLocalManifest(m_settings.strUpdateDir);
-    createRemoteManifest(m_settings.strUpdateDir);
-
     //获取远端信息
     QString strUrlManifest = m_settings.strUpdateUrl + "/" + tr(PROJECT_MANIFEST);
     QString strOutput;
     bool bRes = m_curl.Get(strUrlManifest, strOutput);
     if (!bRes) {
-        return;
+        return false;
     }
 
     JsonStringMap kvMap;
     CJson::JsonToMap(strOutput.toStdString(), kvMap);
 
-    std::map<QString, QString> mapRemoteManifest;
+    mapManifest.clear();
     for (auto& it : kvMap) {
-        mapRemoteManifest[QString::fromStdString(it.first)] = QString::fromStdString(it.second);
+        mapManifest[QString::fromStdString(it.first)] = QString::fromStdString(it.second);
+    }
+    return true;
+}
+
+void CAutoUpdate::compareLocalRemoteManifest(QQMAP &local, QQMAP &remote, FileList &fileList)
+{
+    for (auto& it : remote) {
+        auto fit = local.find(it.first);
+        if (local.end() == fit) {
+            //新增文件
+            fileList.push_back(it.first);
+        } else if (fit->second != it.second) {
+            //md5不同
+            fileList.push_back(it.first);
+        }
+    }
+}
+
+bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
+{
+    static const QString s_tmpDir = "tmp";
+
+    //每次重新创建目录
+    QDir dir = QDir::current();
+    if (dir.exists(s_tmpDir)) {
+        dir.remove(s_tmpDir);
+    }
+    dir.mkdir(s_tmpDir);
+
+    int index = 0;
+    QString strFileName, strName, strPath;
+    for (auto& it : fileList) {
+        //创建目录
+        strFileName = it;
+        index = strFileName.lastIndexOf('/');
+        if (-1 != index) {
+            //带目录的文件
+            strName = strFileName.right(strFileName.length() - index - 1);
+            strPath = strFileName.left(index);
+        } else {
+            strName = strFileName;
+            strPath = "";
+        }
+        dir.mkpath(strPath);
+//        qDebug() << "name=" << strName << " path=" << strPath;
+
+        //下载
+        QFile file(s_tmpDir + "/" + strFileName);
+        if (!file.open(QFile::WriteOnly)) {
+            return false;
+        }
+        m_curl.Get(m_settings.strUpdateUrl + "/" + strFileName, &file);
+        file.close();
+
+        QCoreApplication::processEvents();
+    }
+
+    return true;
+}
+
+void CAutoUpdate::slotTimeout()
+{
+    //获取本地软件信息
+    createLocalManifest(m_mapLocalManifest, m_settings.strUpdateDir);
+    createRemoteManifest(m_mapLocalManifest, m_settings.strUpdateDir);
+
+    if (!getRemoteManifest(m_mapRemoteManifest)) {
+        qDebug() << "获取远端manifest失败";
+        return;
+    }
+
+    FileList fileList;
+    compareLocalRemoteManifest(m_mapLocalManifest, m_mapRemoteManifest, fileList);
+    if (!downloadDiffFiles(fileList)) {
+        return;
     }
 }
 

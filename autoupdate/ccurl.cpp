@@ -311,6 +311,7 @@ size_t CCurl::WriteToMemStd(char *ptr, size_t size, size_t nmemb, void *userdata
 
 size_t CCurl::WriteToFile(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
+    QCoreApplication::processEvents();
     return ((QFile *)userdata)->write((char *)ptr, size*nmemb);
 }
 
