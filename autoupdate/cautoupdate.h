@@ -36,6 +36,7 @@ private:
     bool createLocalManifest(QQMAP& mapManifest, const QString& strPath);
     bool createRemoteManifest(QQMAP& mapManifest, const QString& strPath);
     void searchFile(QFileInfoList &infoList, const QString& strPath);
+    void searchFileEx(QFileInfoList &infoList, const QString& strPath);
     QString getCurrentDirName();
     bool getRemoteManifest(QQMAP& mapManifest);
     void compareLocalRemoteManifest(QQMAP& local, QQMAP& remote, FileList& fileList);

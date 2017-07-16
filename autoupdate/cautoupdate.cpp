@@ -176,6 +176,23 @@ void CAutoUpdate::searchFile(QFileInfoList &infoList, const QString &strPath)
     }
 }
 
+void CAutoUpdate::searchFileEx(QFileInfoList &infoList, const QString &strPath)
+{
+    QDir dir(strPath);
+    QFileInfoList fileList = dir.entryInfoList();
+    foreach (QFileInfo info, fileList) {
+        if (info.fileName() == "." || info.fileName() == "..") {
+            continue;
+        }
+
+        if (info.isFile()) {
+            infoList.append(info);
+        } else if (info.isDir()) {
+            searchFileEx(infoList, info.filePath());
+        }
+    }
+}
+
 QString CAutoUpdate::getCurrentDirName()
 {
     QString strPath = QDir::currentPath();
@@ -309,6 +326,16 @@ void CAutoUpdate::removeAllFiles(const QString &strPath)
 
 void CAutoUpdate::copyAllFiles(const QString &strSrcPath, const QString &strDstPath)
 {
+    QQMAP kvMapSrc;
+    QFileInfoList fileInfoListSrc;
+    searchFileEx(fileInfoListSrc, strSrcPath);
+
+    QString strPath;
+    foreach (QFileInfo info, fileInfoListSrc) {
+        //strPath = strDstPath + "/" + info.filePath();
+        qDebug() << info.filePath();
+    }
+
 //    QDir dir(strPath);
 //    QFileInfoList fileInfoList = dir.entryInfoList();
 //    foreach (QFileInfo info, fileInfoList) {
@@ -336,7 +363,6 @@ void CAutoUpdate::slotTimeout()
     createLocalManifest(m_mapLocalManifest, m_settings.strUpdateDir);
 
     if (!getRemoteManifest(m_mapRemoteManifest)) {
-        qDebug() << "获取远端manifest失败";
         QMessageBox::warning(this, "提示", "获取版本信息失败！");
         return;
     }
@@ -364,6 +390,7 @@ void CAutoUpdate::slotTimeout()
     QProcess::execute(strTmp);
 
     //拷贝更新文件
+    copyAllFiles(TMP_DIR, m_settings.strUpdateDir);
 
     //启动软件
 }
