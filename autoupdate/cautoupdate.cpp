@@ -4,7 +4,7 @@
 #include <QCryptographicHash>
 
 #define SET_UPDATE          "config.ini"
-#define APP_TITLE           "自动更新"
+#define APP_TITLE           "华码科技自动更新"
 #define APP_NAME            "autoupdate.exe"
 #define PROJECT_MANIFEST    "project.manifest"
 #define TMP_DIR             "tmp"
@@ -20,7 +20,7 @@ CAutoUpdate::CAutoUpdate(QWidget *parent) :
 
 //    createRemoteManifest(m_mapLocalManifest, m_settings.strUpdateDir);
 
-    QTimer::singleShot(1000, this, SLOT(slotTimeout()));
+    QTimer::singleShot(1, this, SLOT(slotTimeout()));
 }
 
 CAutoUpdate::~CAutoUpdate()
@@ -28,14 +28,41 @@ CAutoUpdate::~CAutoUpdate()
     delete ui;
 }
 
+void CAutoUpdate::closeEvent(QCloseEvent *e)
+{
+    this->hide();
+    e->ignore();
+    if (m_pSysTrayIcon)
+    {
+        m_pSysTrayIcon->showMessage(tr("提示"), tr("软件将在后台更新！"), QSystemTrayIcon::Information);
+    }
+}
+
 void CAutoUpdate::initUi()
 {
+    setWindowIcon(QIcon(":/images/logo.ico"));
     setWindowFlags(Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint);
     setFixedSize(width(), height());
     setWindowTitle(APP_TITLE);
     ui->labelFileName->clear();
-    ui->progressBar->setValue(0);
-    ui->progressBar->setMaximum(1);
+    ui->pgsBarUpdate->setValue(0);
+    ui->pgsBarUpdate->setMaximum(1);
+    ui->pgsBarCopy->setValue(0);
+    ui->pgsBarCopy->setMaximum(1);
+
+    m_pActQuit = new QAction(QIcon(":/images/exit.png"), tr("退出"), this);
+    connect(m_pActQuit, SIGNAL(triggered()), this, SLOT(slotActQuit()));
+
+    m_pSysTrayMenu = new QMenu(this);
+    m_pSysTrayMenu->addAction(m_pActQuit);
+
+    m_pSysTrayIcon = new QSystemTrayIcon(QIcon(":/images/logo.ico"), this);
+    m_pSysTrayIcon->setToolTip(APP_TITLE);
+    m_pSysTrayIcon->setContextMenu(m_pSysTrayMenu);
+    m_pSysTrayIcon->show();
+    connect(m_pSysTrayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(slotSysTrayIconActivated(QSystemTrayIcon::ActivationReason)));
+
+    connect(&m_timer, SIGNAL(timeout()), this, SLOT(slotTimeout()));
 }
 
 void CAutoUpdate::readSettings()
@@ -48,7 +75,7 @@ void CAutoUpdate::readSettings()
     if (set.contains(strKey)) {
         m_settings.strUpdateDir = set.value(strKey).toString();
     } else {
-        m_settings.strUpdateDir = "../";
+        m_settings.strUpdateDir = "..";
         set.setValue(strKey, m_settings.strUpdateDir);
     }
 
@@ -57,7 +84,9 @@ void CAutoUpdate::readSettings()
         strTmp = set.value(strKey).toString();
         m_settings.strNotUpdateDirList = strTmp.split(';');
     } else {
-        set.setValue(strKey, "id_logs");
+        strTmp = "id_logs;";
+        set.setValue(strKey, strTmp);
+        m_settings.strNotUpdateDirList = strTmp.split(';');
     }
 
     strKey = "update/not_update_files";
@@ -65,35 +94,35 @@ void CAutoUpdate::readSettings()
         strTmp = set.value(strKey).toString();
         m_settings.strNotUpdateFileList = strTmp.split(';');
     } else {
-        set.setValue(strKey, "");
+        strTmp = "cardreadlog.txt;CollectConfig.ini;IDInfoLog.txt;Log.dat;upload.txt;";
+        set.setValue(strKey, strTmp);
+        m_settings.strNotUpdateFileList = strTmp.split(';');
     }
-
-//    strKey = "update/need_update_files";
-//    if (set.contains(strKey)) {
-//        strTmp = set.value(strKey).toString();
-//        m_settings.strNeedUpdateFileList = strTmp.split(';');
-//    } else {
-//        strTmp = "*.exe;*.dll;*.ini;*.wav;*.bmp;*.pdb;*.wlt;WZ.txt;";
-//        set.setValue(strKey, strTmp);
-//        m_settings.strNeedUpdateFileList = strTmp.split(';');
-//    }
 
     strKey = "update/update_url";
     if (set.contains(strKey)) {
         m_settings.strUpdateUrl = set.value(strKey).toString();
     } else {
         m_settings.strUpdateUrl = "";
-        set.setValue(strKey, "http://www.abc.com");
+        set.setValue(strKey, "http://127.0.0.1:8080");
         QMessageBox::warning(this, "提示", "请配置更新地址update_url！");
         return;
     }
 
-    //隐含配置
-    strKey = "update/kill_exe";
+    strKey = "update/app";
     if (set.contains(strKey)) {
-        m_settings.strKillExe = set.value(strKey).toString();
+        m_settings.strApp = set.value(strKey).toString();
     } else {
-        m_settings.strKillExe = "";
+        m_settings.strApp = "FaceHuaMaWT.exe";
+        set.setValue(strKey, m_settings.strApp);
+    }
+
+    strKey = "update/update_interval";
+    if (set.contains(strKey)) {
+        m_settings.nUpdateInterval = set.value(strKey).toInt();
+    } else {
+        m_settings.nUpdateInterval = 3600;
+        set.setValue(strKey, m_settings.nUpdateInterval);
     }
 }
 
@@ -106,7 +135,7 @@ bool CAutoUpdate::createLocalManifest(QQMAP &mapManifest, const QString &strPath
 
     QString strFileName, strMd5;
     foreach (QFileInfo info, m_fileInfoList) {
-        strFileName = info.filePath().replace(m_settings.strUpdateDir, "");
+        strFileName = info.filePath().replace(m_settings.strUpdateDir + "/", "");
         QFile file(info.filePath());
         if (file.open(QFile::ReadOnly)) {
             strMd5 = QCryptographicHash::hash(file.readAll(), QCryptographicHash::Md5).toHex();
@@ -134,7 +163,7 @@ bool CAutoUpdate::createRemoteManifest(QQMAP &mapManifest, const QString &strPat
     Json::Value jsonVal;
     QString strFileName, strMd5;
     foreach (QFileInfo info, m_fileInfoList) {
-        strFileName = info.filePath().replace(m_settings.strUpdateDir, "");
+        strFileName = info.filePath().replace(m_settings.strUpdateDir + "/", "");
         QFile file(info.filePath());
         if (file.open(QFile::ReadOnly)) {
             strMd5 = QCryptographicHash::hash(file.readAll(), QCryptographicHash::Md5).toHex();
@@ -178,6 +207,7 @@ void CAutoUpdate::searchFile(QFileInfoList &infoList, const QString &strPath)
 
 void CAutoUpdate::searchFileEx(QFileInfoList &infoList, const QString &strPath)
 {
+    QString strCurrentPath = getCurrentDirName();
     QDir dir(strPath);
     QFileInfoList fileList = dir.entryInfoList();
     foreach (QFileInfo info, fileList) {
@@ -187,7 +217,7 @@ void CAutoUpdate::searchFileEx(QFileInfoList &infoList, const QString &strPath)
 
         if (info.isFile()) {
             infoList.append(info);
-        } else if (info.isDir()) {
+        } else if (info.isDir() && strCurrentPath != info.fileName()) {
             searchFileEx(infoList, info.filePath());
         }
     }
@@ -195,12 +225,17 @@ void CAutoUpdate::searchFileEx(QFileInfoList &infoList, const QString &strPath)
 
 QString CAutoUpdate::getCurrentDirName()
 {
-    QString strPath = QDir::currentPath();
-    QStringList strList = strPath.split('/');
-    if (!strList.isEmpty()) {
-        return strList.last();
-    }
-    return "";
+    QString strPath = qApp->applicationDirPath();
+    int index = strPath.lastIndexOf('/');
+    QString strCurrentDir = strPath.right(strPath.length() - index - 1);
+    return strCurrentDir;
+
+//    QString strPath = QDir::currentPath();
+//    QStringList strList = strPath.split('/');
+//    if (!strList.isEmpty()) {
+//        return strList.last();
+//    }
+//    return "";
 }
 
 bool CAutoUpdate::getRemoteManifest(QQMAP &mapManifest)
@@ -251,8 +286,8 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
 
     int index = 0, count = 0;
     QString strFileName, strName, strPath;
-    ui->progressBar->setMaximum(fileList.size());
-    ui->progressBar->setValue(0);
+    ui->pgsBarUpdate->setMaximum(fileList.size());
+    ui->pgsBarUpdate->setValue(0);
     for (auto& it : fileList) {
         //创建目录
         strFileName = it;
@@ -277,14 +312,13 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
         strTmp = s_tmpDir + "/" + strFileName;
         QFile file(strTmp);
         if (!file.open(QFile::WriteOnly)) {
-            qDebug() << strTmp;
             return false;
         }
         strUrl = m_settings.strUpdateUrl + "/" + strFileName;
         m_curl.Get(strUrl, &file);
         file.close();
 
-        ui->progressBar->setValue(++count);
+        ui->pgsBarUpdate->setValue(++count);
         QCoreApplication::processEvents();
     }
 
@@ -326,34 +360,56 @@ void CAutoUpdate::removeAllFiles(const QString &strPath)
 
 void CAutoUpdate::copyAllFiles(const QString &strSrcPath, const QString &strDstPath)
 {
+    QString strTmp, strPre;
+
+    //src
     QQMAP kvMapSrc;
     QFileInfoList fileInfoListSrc;
     searchFileEx(fileInfoListSrc, strSrcPath);
-
-    QString strPath;
+    strPre = strSrcPath + "/";
     foreach (QFileInfo info, fileInfoListSrc) {
-        //strPath = strDstPath + "/" + info.filePath();
-        qDebug() << info.filePath();
+        strTmp = info.filePath().replace(strPre, "");
+        kvMapSrc[strTmp] = info.absoluteFilePath();
+//        qDebug() << "src " << strTmp << " -> " << info.absoluteFilePath();
     }
 
-//    QDir dir(strPath);
-//    QFileInfoList fileInfoList = dir.entryInfoList();
-//    foreach (QFileInfo info, fileInfoList) {
-//        if (info.fileName() == "." || info.fileName() == "..") {
-//            continue;
-//        }
+    QQMAP kvMapDst;
+    QFileInfoList fileInfoListDst;
+    searchFileEx(fileInfoListDst, strDstPath);
+    strPre = strDstPath + "/";
+    foreach (QFileInfo info, fileInfoListDst) {
+        strTmp = info.filePath().replace(strPre, "");
+        kvMapDst[strTmp] = info.absoluteFilePath();
+//        qDebug() << "dst " << strTmp << " -> " << info.absoluteFilePath();
+    }
 
-//        if (info.isFile()) {
-//            QFile::remove(info.filePath());
-//        } else if (info.isDir()) {
-//            removeAllFiles(info.filePath());
-//        }
-//    }
+    //从更新文件开始拷贝过去
+    int count = 0;
+    QString strSimplePath, strAbsolutePath, strAbsolutePathDst;
+    ui->pgsBarCopy->setMaximum(kvMapSrc.size());
+    for (auto& it : kvMapSrc) {
+        strSimplePath = it.first;
+        strAbsolutePath = it.second;
+        strAbsolutePathDst = kvMapDst[strSimplePath];
+        if (QFile::exists(strAbsolutePath)) {
+            QFile::remove(strAbsolutePathDst);
+//            qDebug() << "remove " << strAbsolutePathDst << QFile::remove(strAbsolutePathDst);
+        }
+        QFile::copy(strAbsolutePath, strAbsolutePathDst);
+//        qDebug() << "copy " << strSimplePath << QFile::copy(strAbsolutePath, strAbsolutePathDst);
+        ui->pgsBarCopy->setValue(++count);
+        ui->labelFileName->setText(strSimplePath);
+    }
 }
 
 void CAutoUpdate::slotTimeout()
 {
+    m_timer.stop();
+
+    ui->labelFileName->setText("检查更新");
+
     if (!canUpdate()) {
+        m_timer.start(m_settings.nUpdateInterval * 1000);
         return;
     }
 
@@ -361,9 +417,11 @@ void CAutoUpdate::slotTimeout()
 
     //获取本地软件信息
     createLocalManifest(m_mapLocalManifest, m_settings.strUpdateDir);
+//    createRemoteManifest(m_mapRemoteManifest, m_settings.strUpdateUrl + "/" + PROJECT_MANIFEST);
 
     if (!getRemoteManifest(m_mapRemoteManifest)) {
-        QMessageBox::warning(this, "提示", "获取版本信息失败！");
+        m_pSysTrayIcon->showMessage("提示", "获取版本信息失败！", QSystemTrayIcon::Information);
+        m_timer.start(m_settings.nUpdateInterval * 1000);
         return;
     }
 
@@ -371,27 +429,54 @@ void CAutoUpdate::slotTimeout()
     FileList diffList;
     compareLocalRemoteManifest(m_mapLocalManifest, m_mapRemoteManifest, diffList);
     if (diffList.empty()) {
-        QMessageBox::warning(this, "提示", "软件已经是最新版本，无需更新！");
+        ui->labelFileName->setText("软件已经是最新版本！");
+        m_timer.start(m_settings.nUpdateInterval * 1000);
         return;
     }
 
     //下载文件
+    m_pSysTrayIcon->showMessage("提示", "开始下载更新文件。。。", QSystemTrayIcon::Information);
     if (!downloadDiffFiles(diffList)) {
-        QMessageBox::warning(this, "提示", "更新失败！");
+        m_pSysTrayIcon->showMessage("提示", "下载更新文件失败！", QSystemTrayIcon::Information);
+        m_timer.start(m_settings.nUpdateInterval * 1000);
         return;
     }
 
     //杀死进程
-    if (m_settings.strKillExe.isEmpty()) {
-        strTmp = "taskkill /im FaceHuaMaWT* /f";
-    } else {
-        strTmp = tr("taskkill /im %1* /f").arg(m_settings.strKillExe);
-    }
+    strTmp = tr("taskkill /im %1* /f").arg(m_settings.strApp);
     QProcess::execute(strTmp);
 
     //拷贝更新文件
     copyAllFiles(TMP_DIR, m_settings.strUpdateDir);
 
-    //启动软件
+    //启动软件,先切到目标目录启动，再切回去，由于对方的软件含有相对路径操作，所以要这么处理
+    QString strCurrentDir = qApp->applicationDirPath();
+    QDir::setCurrent(m_settings.strUpdateDir + "/");
+    QProcess::startDetached(m_settings.strApp);
+    QDir::setCurrent(strCurrentDir);
+
+    //结束
+    ui->labelFileName->setText("更新完成");
+    m_pSysTrayIcon->showMessage("提示", "更新完成！", QSystemTrayIcon::Information);
+
+    //继续开启下一次更新
+    m_timer.start(m_settings.nUpdateInterval * 1000);
+}
+
+void CAutoUpdate::slotActQuit()
+{
+    if (QMessageBox::warning(this, tr("退出"), tr("确定退出自动更新？"), QMessageBox::Ok|QMessageBox::Cancel) == QMessageBox::Ok)
+    {
+        qApp->quit();
+    }
+}
+
+void CAutoUpdate::slotSysTrayIconActivated(QSystemTrayIcon::ActivationReason reason)
+{
+    if (QSystemTrayIcon::Trigger == reason)
+    {
+        this->activateWindow();
+        this->showNormal();
+    }
 }
 

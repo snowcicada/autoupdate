@@ -43,3 +43,9 @@ HEADERS  += cautoupdate.h \
 FORMS    += cautoupdate.ui
 
 QMAKE_CXXFLAGS += -std=c++11
+
+RESOURCES += \
+    images/images.qrc
+
+RC_FILE = images/logo.rc
+

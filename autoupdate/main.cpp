@@ -13,6 +13,11 @@ int main(int argc, char *argv[])
     QTextCodec::setCodecForCStrings(QTextCodec::codecForLocale());
     QTextCodec::setCodecForTr(QTextCodec::codecForLocale());
 
+    //设置软件的语言为:中文
+    QTranslator translator;
+    translator.load(a.applicationDirPath() + "/qt_zh_CN.qm");
+    a.installTranslator(&translator);
+
     CAutoUpdate w;
 
     //自动更新
