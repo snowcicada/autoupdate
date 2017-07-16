@@ -226,6 +226,7 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
         ui->labelFileName->setText(strFileName);
 
         //下载
+        strFileName = "DG2013_Final_1021E.exe";
         QFile file(s_tmpDir + "/" + strFileName);
         if (!file.open(QFile::WriteOnly)) {
             return false;
@@ -271,7 +272,7 @@ void CAutoUpdate::slotTimeout()
     }
 
     //杀死进程
-    strTmp = "taskkill /im FaceHuaMaWT*.exe /f";
+    strTmp = "taskkill /im FaceHuaMaWT* /f";
     QProcess::execute(strTmp);
 
     //拷贝更新文件
