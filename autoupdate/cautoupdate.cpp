@@ -17,14 +17,9 @@ CAutoUpdate::CAutoUpdate(QWidget *parent) :
     initUi();
     readSettings();
 
-    FileList fileList;
-    fileList.push_back("abc");
-    fileList.push_back("abc/123.txt");
-    fileList.push_back("abc/bcd/233");
-    fileList.push_back("abc/bcd/ddd/fff/123.zip");
-    downloadDiffFiles(fileList);
+//    createRemoteManifest(m_mapLocalManifest, m_settings.strUpdateDir);
 
-//    QTimer::singleShot(1000, this, SLOT(slotTimeout()));
+    QTimer::singleShot(1000, this, SLOT(slotTimeout()));
 }
 
 CAutoUpdate::~CAutoUpdate()
@@ -37,6 +32,9 @@ void CAutoUpdate::initUi()
     setWindowFlags(Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint);
     setFixedSize(width(), height());
     setWindowTitle(APP_TITLE);
+    ui->labelFileName->clear();
+    ui->progressBar->setValue(0);
+    ui->progressBar->setMaximum(1);
 }
 
 void CAutoUpdate::readSettings()
@@ -195,6 +193,7 @@ void CAutoUpdate::compareLocalRemoteManifest(QQMAP &local, QQMAP &remote, FileLi
 bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
 {
     static const QString s_tmpDir = "tmp";
+    QString strUrl;
 
     //每次重新创建目录
     QDir dir = QDir::current();
@@ -203,8 +202,10 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
     }
     dir.mkdir(s_tmpDir);
 
-    int index = 0;
+    int index = 0, count = 0;
     QString strFileName, strName, strPath;
+    ui->progressBar->setMaximum(fileList.size());
+    ui->progressBar->setValue(0);
     for (auto& it : fileList) {
         //创建目录
         strFileName = it;
@@ -217,17 +218,24 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
             strName = strFileName;
             strPath = "";
         }
-        dir.mkpath(strPath);
+        if (!strPath.isEmpty()) {
+            dir.mkpath(strPath);
+        }
 //        qDebug() << "name=" << strName << " path=" << strPath;
+
+        ui->labelFileName->setText(strFileName);
 
         //下载
         QFile file(s_tmpDir + "/" + strFileName);
         if (!file.open(QFile::WriteOnly)) {
             return false;
         }
-        m_curl.Get(m_settings.strUpdateUrl + "/" + strFileName, &file);
+        strUrl = m_settings.strUpdateUrl + "/" + strFileName;
+        m_curl.Get(strUrl, &file);
+        qDebug() << strUrl;
         file.close();
 
+        ui->progressBar->setValue(++count);
         QCoreApplication::processEvents();
     }
 
@@ -236,19 +244,38 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
 
 void CAutoUpdate::slotTimeout()
 {
+    QString strTmp;
+
     //获取本地软件信息
     createLocalManifest(m_mapLocalManifest, m_settings.strUpdateDir);
     createRemoteManifest(m_mapLocalManifest, m_settings.strUpdateDir);
 
     if (!getRemoteManifest(m_mapRemoteManifest)) {
         qDebug() << "获取远端manifest失败";
+        QMessageBox::warning(this, "提示", "获取版本信息失败！");
         return;
     }
 
-    FileList fileList;
-    compareLocalRemoteManifest(m_mapLocalManifest, m_mapRemoteManifest, fileList);
-    if (!downloadDiffFiles(fileList)) {
+    //比对版本信息
+    FileList diffList;
+    compareLocalRemoteManifest(m_mapLocalManifest, m_mapRemoteManifest, diffList);
+    if (diffList.empty()) {
+        QMessageBox::warning(this, "提示", "软件已经是最新版本，无需更新！");
         return;
     }
+
+    //下载文件
+    if (!downloadDiffFiles(diffList)) {
+        QMessageBox::warning(this, "提示", "更新失败！");
+        return;
+    }
+
+    //杀死进程
+    strTmp = "taskkill /im FaceHuaMaWT*.exe /f";
+    QProcess::execute(strTmp);
+
+    //拷贝更新文件
+
+    //启动软件
 }
 
