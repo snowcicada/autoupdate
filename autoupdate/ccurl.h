@@ -14,10 +14,24 @@
 #include <QtCore>
 #include "curl/curl.h"
 
-class CCurl
+class CCurl;
+
+struct stCurlParam {
+    stCurlParam(CCurl* pCurl, QFile* fp) {
+        this->pCurl = pCurl;
+        this->fp = fp;
+    }
+
+    CCurl* pCurl;
+    QFile* fp;
+};
+
+class CCurl : public QObject
 {
+    Q_OBJECT
+
 public:
-    CCurl();
+    CCurl(QObject* parent = 0);
     ~CCurl();
 
     bool Init();
@@ -39,6 +53,9 @@ public:
 private:
     char *Malloc(const char *ptr, int size);
     void  Free(char *ptr);
+
+signals:
+    void signalSize(int size);
 
 private:
     CURL    *m_pCurl;

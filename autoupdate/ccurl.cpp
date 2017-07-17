@@ -16,7 +16,7 @@
 //模拟浏览器
 const char *CCurl::m_UserAgent = "Mozilla/5.0 (Windows NT 6.1; rv:29.0) Gecko/20100101 Firefox/29.0";//"Mozilla/5.0 (Windows NT 5.1; rv:17.0) Gecko/20100101 Firefox/17.0";
 
-CCurl::CCurl()
+CCurl::CCurl(QObject *parent) : QObject(parent)
 {
     m_pCurl = NULL;
     m_pConnectionList = NULL;
@@ -159,12 +159,14 @@ bool CCurl::Get(const QString &visitUrl, QString &htmlStr)
     return true;
 }
 
+//下载文件设置一个很大的超时时间
 bool CCurl::Get(const QString &visitUrl, QFile *fp)
 {
     CURLcode code;
 
     char *pUrl = Malloc(visitUrl.toLatin1().data(), visitUrl.size());
     char *pCkFileName = Malloc(m_CookiesFileName.toAscii().data(), m_CookiesFileName.toAscii().size());
+    stCurlParam* param = new stCurlParam(this, fp);
 
     Reset();
     curl_easy_setopt(m_pCurl, CURLOPT_URL, pUrl);
@@ -173,12 +175,12 @@ bool CCurl::Get(const QString &visitUrl, QFile *fp)
     curl_easy_setopt(m_pCurl, CURLOPT_COOKIEJAR, pCkFileName);
     curl_easy_setopt(m_pCurl, CURLOPT_COOKIEFILE, pCkFileName);
     curl_easy_setopt(m_pCurl, CURLOPT_WRITEFUNCTION, WriteToFile);
-    curl_easy_setopt(m_pCurl, CURLOPT_WRITEDATA, fp);
+    curl_easy_setopt(m_pCurl, CURLOPT_WRITEDATA, param);
     curl_easy_setopt(m_pCurl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(m_pCurl, CURLOPT_HTTPHEADER, m_pConnectionList);
     curl_easy_setopt(m_pCurl, CURLOPT_USERAGENT, m_UserAgent);
     curl_easy_setopt(m_pCurl, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(m_pCurl, CURLOPT_TIMEOUT, 15L);
+    curl_easy_setopt(m_pCurl, CURLOPT_TIMEOUT, 36000L);//10hour
 //    curl_easy_setopt(m_pCurl, CURLOPT_DEBUGFUNCTION, CurlDebug);//打印完整的调试信息
 //    curl_easy_setopt(m_pCurl, CURLOPT_VERBOSE, 1);//打印调试信息
 
@@ -190,6 +192,7 @@ bool CCurl::Get(const QString &visitUrl, QFile *fp)
     code = curl_easy_perform(m_pCurl);
     Free(pUrl);
     Free(pCkFileName);
+    delete param;
     if (CURLE_OK != code)
     {
         qDebug() << "curl_easy_perform: " << curl_easy_strerror(code);
@@ -311,8 +314,12 @@ size_t CCurl::WriteToMemStd(char *ptr, size_t size, size_t nmemb, void *userdata
 
 size_t CCurl::WriteToFile(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
-    QCoreApplication::processEvents();
-    return ((QFile *)userdata)->write((char *)ptr, size*nmemb);
+    stCurlParam* param = static_cast<stCurlParam*>(userdata);
+    if (!param) {
+        return 0;
+    }
+    emit param->pCurl->signalSize(size * nmemb);
+    return param->fp->write((char *)ptr, size*nmemb);
 }
 
 int CCurl::CurlDebug(CURL *pcurl, curl_infotype itype, char * pData, size_t size, void *)

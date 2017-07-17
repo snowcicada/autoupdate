@@ -4,7 +4,7 @@
 #include <QCryptographicHash>
 
 #define SET_UPDATE          "config.ini"
-#define APP_TITLE           "华码科技自动更新 v1.0"
+#define APP_TITLE           "华码科技自动更新 v1.1"
 #define APP_NAME            "autoupdate.exe"
 #define PROJECT_MANIFEST    "project.manifest"
 #define TMP_DIR             "tmp"
@@ -40,6 +40,9 @@ void CAutoUpdate::closeEvent(QCloseEvent *e)
 
 void CAutoUpdate::initUi()
 {
+    m_nSize = 0;
+    ui->labelSize->setText("0B");
+
     setWindowIcon(QIcon(":/images/logo.ico"));
     setWindowFlags(Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint);
     setFixedSize(width(), height());
@@ -63,6 +66,7 @@ void CAutoUpdate::initUi()
     connect(m_pSysTrayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(slotSysTrayIconActivated(QSystemTrayIcon::ActivationReason)));
 
     connect(&m_timer, SIGNAL(timeout()), this, SLOT(slotTimeout()));
+    connect(&m_curl, SIGNAL(signalSize(int)), this ,SLOT(slotCurlSize(int)));
 }
 
 void CAutoUpdate::readSettings()
@@ -260,15 +264,18 @@ bool CAutoUpdate::getRemoteManifest(QQMAP &mapManifest)
 
 void CAutoUpdate::compareLocalRemoteManifest(QQMAP &local, QQMAP &remote, FileList &fileList)
 {
+//    fileList.push_back("THFaceImage.dll");
     for (auto& it : remote) {
         auto fit = local.find(it.first);
-        if (local.end() == fit) {
-            //新增文件
-            fileList.push_back(it.first);
-        } else if (fit->second != it.second) {
-            //md5不同
-            fileList.push_back(it.first);
-        }
+        fileList.push_back(it.first);
+        //test
+//        if (local.end() == fit) {
+//            //新增文件
+//            fileList.push_back(it.first);
+//        } else if (fit->second != it.second) {
+//            //md5不同
+//            fileList.push_back(it.first);
+//        }
     }
 }
 
@@ -288,6 +295,8 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
     QString strFileName, strName, strPath;
     ui->pgsBarUpdate->setMaximum(fileList.size());
     ui->pgsBarUpdate->setValue(0);
+    ui->labelSize->setText("0B");
+    m_nSize = 0;
     for (auto& it : fileList) {
         //创建目录
         strFileName = it;
@@ -402,6 +411,24 @@ void CAutoUpdate::copyAllFiles(const QString &strSrcPath, const QString &strDstP
     }
 }
 
+QString CAutoUpdate::convertFileSize(int size)
+{
+    static const int s_b = 1024;
+    static const int s_kb = 1024 * 1024;
+    static const int s_mb = 1024 * 1024 * 1024;
+
+    QString strSize;
+    if (size < s_b) {
+        strSize = tr("%1B").arg(size);
+    } else if (size < s_kb) {
+        strSize = tr("%1KB").arg(1.0 * size / s_b, 0, 'f', 2);
+    } else if (size < s_mb) {
+        strSize = tr("%1MB").arg(1.0 * size / s_kb, 0, 'f', 2);
+    }
+
+    return strSize;
+}
+
 void CAutoUpdate::slotTimeout()
 {
     m_timer.stop();
@@ -478,5 +505,12 @@ void CAutoUpdate::slotSysTrayIconActivated(QSystemTrayIcon::ActivationReason rea
         this->activateWindow();
         this->showNormal();
     }
+}
+
+void CAutoUpdate::slotCurlSize(int size)
+{
+    m_nSize += size;
+    ui->labelSize->setText(convertFileSize(m_nSize));
+    QCoreApplication::processEvents();
 }
 

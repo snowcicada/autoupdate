@@ -48,11 +48,13 @@ private:
     bool canUpdate();
     void removeAllFiles(const QString& strPath);
     void copyAllFiles(const QString& strSrcPath, const QString& strDstPath);
+    QString convertFileSize(int size);
 
 private slots:
     void slotTimeout();
     void slotActQuit();
     void slotSysTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
+    void slotCurlSize(int size);
     
 private:
     Ui::CAutoUpdate *ui;
@@ -66,5 +68,6 @@ private:
     QMenu* m_pSysTrayMenu;
     QAction* m_pActQuit;
     QTimer m_timer;
+    int m_nSize;
 };
 #endif // CAUTOUPDATE_H
