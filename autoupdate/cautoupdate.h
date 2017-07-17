@@ -53,6 +53,7 @@ private:
 private slots:
     void slotTimeout();
     void slotActQuit();
+    void slotActStop();
     void slotSysTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
     void slotCurlSize(int size);
     
@@ -67,7 +68,9 @@ private:
     QSystemTrayIcon* m_pSysTrayIcon;
     QMenu* m_pSysTrayMenu;
     QAction* m_pActQuit;
+    QAction* m_pActStop;
     QTimer m_timer;
     int m_nSize;
+    bool m_bStopUpdate;
 };
 #endif // CAUTOUPDATE_H

@@ -42,6 +42,7 @@ void CAutoUpdate::initUi()
 {
     m_nSize = 0;
     ui->labelSize->setText("0B");
+    m_bStopUpdate = false;
 
     setWindowIcon(QIcon(":/images/logo.ico"));
     setWindowFlags(Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint);
@@ -56,7 +57,11 @@ void CAutoUpdate::initUi()
     m_pActQuit = new QAction(QIcon(":/images/exit.png"), tr("退出"), this);
     connect(m_pActQuit, SIGNAL(triggered()), this, SLOT(slotActQuit()));
 
+//    m_pActStop = new QAction(QIcon(":/images/stop.png"), tr("停止更新"), this);
+//    connect(m_pActStop, SIGNAL(triggered()), this, SLOT(slotActStop()));
+
     m_pSysTrayMenu = new QMenu(this);
+//    m_pSysTrayMenu->addAction(m_pActStop);
     m_pSysTrayMenu->addAction(m_pActQuit);
 
     m_pSysTrayIcon = new QSystemTrayIcon(QIcon(":/images/logo.ico"), this);
@@ -298,6 +303,11 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
     ui->labelSize->setText("0B");
     m_nSize = 0;
     for (auto& it : fileList) {
+        if (m_bStopUpdate) {
+            qApp->quit();
+            return false;
+        }
+
         //创建目录
         strFileName = it;
         index = strFileName.lastIndexOf('/');
@@ -432,6 +442,7 @@ QString CAutoUpdate::convertFileSize(int size)
 void CAutoUpdate::slotTimeout()
 {
     m_timer.stop();
+    m_bStopUpdate = false;
 
     ui->labelFileName->setText("检查更新");
 
@@ -494,8 +505,16 @@ void CAutoUpdate::slotActQuit()
 {
     if (QMessageBox::warning(this, tr("退出"), tr("确定退出自动更新？"), QMessageBox::Ok|QMessageBox::Cancel) == QMessageBox::Ok)
     {
+        m_bStopUpdate = true;
+        m_pSysTrayIcon->showMessage("提示", "下载完该文件马上退出，请稍等！");
         qApp->quit();
     }
+}
+
+void CAutoUpdate::slotActStop()
+{
+    m_bStopUpdate = true;
+    m_pSysTrayIcon->showMessage("提示", "将在下个文件停止下载！");
 }
 
 void CAutoUpdate::slotSysTrayIconActivated(QSystemTrayIcon::ActivationReason reason)
