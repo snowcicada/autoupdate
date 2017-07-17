@@ -269,18 +269,15 @@ bool CAutoUpdate::getRemoteManifest(QQMAP &mapManifest)
 
 void CAutoUpdate::compareLocalRemoteManifest(QQMAP &local, QQMAP &remote, FileList &fileList)
 {
-//    fileList.push_back("THFaceImage.dll");
     for (auto& it : remote) {
         auto fit = local.find(it.first);
-        fileList.push_back(it.first);
-        //test
-//        if (local.end() == fit) {
-//            //新增文件
-//            fileList.push_back(it.first);
-//        } else if (fit->second != it.second) {
-//            //md5不同
-//            fileList.push_back(it.first);
-//        }
+        if (local.end() == fit) {
+            //新增文件
+            fileList.push_back(it.first);
+        } else if (fit->second != it.second) {
+            //md5不同
+            fileList.push_back(it.first);
+        }
     }
 }
 
@@ -505,9 +502,9 @@ void CAutoUpdate::slotActQuit()
 {
     if (QMessageBox::warning(this, tr("退出"), tr("确定退出自动更新？"), QMessageBox::Ok|QMessageBox::Cancel) == QMessageBox::Ok)
     {
+        qApp->quit();
         m_bStopUpdate = true;
         m_pSysTrayIcon->showMessage("提示", "下载完该文件马上退出，请稍等！");
-        qApp->quit();
     }
 }
 
