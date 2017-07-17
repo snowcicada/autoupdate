@@ -438,6 +438,8 @@ QString CAutoUpdate::convertFileSize(int size)
 
 void CAutoUpdate::slotTimeout()
 {
+    this->hide();
+
     m_timer.stop();
     m_bStopUpdate = false;
 
