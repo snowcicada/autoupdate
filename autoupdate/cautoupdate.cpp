@@ -20,22 +20,6 @@ CAutoUpdate::CAutoUpdate(QWidget *parent) :
     initUi();
     readSettings();
 
-//    HANDLE hMap=CreateFileMappingA((HANDLE)0xffffffff,NULL,
-//                                  PAGE_READWRITE,0,128,"TH_FACER_DEMO");
-//    if (hMap != NULL) {
-//        if (GetLastError() == ERROR_ALREADY_EXISTS) {
-//            CloseHandle(hMap);
-//            hMap = NULL;
-//            qDebug() << "####";
-//        } else {
-//            qDebug() << "aaAAA";
-//        }
-//    }
-
-//    QDir dir = QDir::current();
-//    dir.cdUp();
-//    qDebug() << dir.entryList();
-
 //    createRemoteManifest(m_mapLocalManifest, m_settings.strUpdateDir);
 
     QTimer::singleShot(1, this, SLOT(slotTimeout()));
@@ -53,6 +37,13 @@ void CAutoUpdate::closeEvent(QCloseEvent *e)
     if (m_pSysTrayIcon)
     {
         m_pSysTrayIcon->showMessage(tr("提示"), tr("软件将在后台更新！"), QSystemTrayIcon::Information);
+    }
+}
+
+void CAutoUpdate::keyPressEvent(QKeyEvent *e)
+{
+    if (Qt::Key_Escape == e->key()) {
+        e->ignore();
     }
 }
 
@@ -256,13 +247,13 @@ QString CAutoUpdate::getCurrentDirName()
     int index = strPath.lastIndexOf('/');
     QString strCurrentDir = strPath.right(strPath.length() - index - 1);
     return strCurrentDir;
+}
 
-//    QString strPath = QDir::currentPath();
-//    QStringList strList = strPath.split('/');
-//    if (!strList.isEmpty()) {
-//        return strList.last();
-//    }
-//    return "";
+QString CAutoUpdate::getBasePath(const QString &strPath)
+{
+    int index = strPath.lastIndexOf('/');
+    QString strBasePath = strPath.left(index);
+    return strBasePath;
 }
 
 bool CAutoUpdate::getRemoteManifest(QQMAP &mapManifest)
@@ -349,7 +340,9 @@ bool CAutoUpdate::downloadDiffFiles(const FileList &fileList)
             return false;
         }
         strUrl = m_settings.strUpdateUrl + "/" + strFileName;
-        m_curl.Get(strUrl, &file);
+        if (!m_curl.Get(strUrl, &file)) {
+            return false;
+        }
         file.close();
 
         ui->pgsBarUpdate->setValue(++count);
@@ -419,18 +412,25 @@ void CAutoUpdate::copyAllFiles(const QString &strSrcPath, const QString &strDstP
 
     //从更新文件开始拷贝过去
     int count = 0;
-    QString strSimplePath, strAbsolutePath, strAbsolutePathDst;
+    QString strSimplePath, strAbsolutePath, strAbsolutePathDst, strBasePath;
     ui->pgsBarCopy->setMaximum(kvMapSrc.size());
     for (auto& it : kvMapSrc) {
         strSimplePath = it.first;
         strAbsolutePath = it.second;
         strAbsolutePathDst = kvMapDst[strSimplePath];
+        strAbsolutePathDst = strDstPath + "/" + strSimplePath;
+        strBasePath = getBasePath(strAbsolutePathDst);
+//        qDebug() << strBasePath;
+        QDir::current().mkpath(strBasePath);
         if (QFile::exists(strAbsolutePath)) {
             QFile::remove(strAbsolutePathDst);
 //            qDebug() << "remove " << strAbsolutePathDst << QFile::remove(strAbsolutePathDst);
         }
         QFile::copy(strAbsolutePath, strAbsolutePathDst);
+//        qDebug() << "src " << strAbsolutePath;
+//        qDebug() << "dst " << strAbsolutePathDst << "\n";
 //        qDebug() << "copy " << strSimplePath << QFile::copy(strAbsolutePath, strAbsolutePathDst);
+
         ui->pgsBarCopy->setValue(++count);
         ui->labelFileName->setText(strSimplePath);
     }
@@ -461,6 +461,22 @@ QString CAutoUpdate::toGbk(const QString &strIn)
         return codec->toUnicode(strIn.toLatin1());
     }
     return strIn;
+}
+
+bool CAutoUpdate::isReleaseFileMap()
+{
+    HANDLE hMap = CreateFileMappingA((HANDLE)0xffffffff,NULL,
+                                  PAGE_READWRITE,0,128,"TH_FACER_DEMO");
+    if (hMap != NULL) {
+        if (GetLastError() == ERROR_ALREADY_EXISTS) {
+            CloseHandle(hMap);
+            hMap = NULL;
+            return false;
+        }
+        CloseHandle(hMap);
+        hMap = NULL;
+    }
+    return true;
 }
 
 void CAutoUpdate::slotTimeout()
@@ -508,7 +524,11 @@ void CAutoUpdate::slotTimeout()
 
     //杀死进程
     strTmp = tr("taskkill /im %1* /f").arg(m_settings.strApp);
-    QProcess::execute(strTmp);
+    QProcess proKill(this);
+    proKill.start(strTmp);
+    proKill.waitForFinished();
+//    strTmp = tr("taskkill /im %1* /f").arg(m_settings.strApp);
+//    QProcess::execute(strTmp);
 
     //拷贝更新文件
     copyAllFiles(TMP_DIR, m_settings.strUpdateDir);

@@ -32,6 +32,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *e);
+    void keyPressEvent(QKeyEvent * e);
 
 private:
     void initUi();
@@ -41,6 +42,7 @@ private:
     void searchFile(QFileInfoList &infoList, const QString& strPath);
     void searchFileEx(QFileInfoList &infoList, const QString& strPath);
     QString getCurrentDirName();
+    QString getBasePath(const QString& strPath);
     bool getRemoteManifest(QQMAP& mapManifest);
     void compareLocalRemoteManifest(QQMAP& local, QQMAP& remote, FileList& fileList);
     bool downloadDiffFiles(const FileList& fileList);
@@ -50,6 +52,7 @@ private:
     void copyAllFiles(const QString& strSrcPath, const QString& strDstPath);
     QString convertFileSize(int size);
     QString toGbk(const QString& strIn);
+    bool isReleaseFileMap();
 
 private slots:
     void slotTimeout();
