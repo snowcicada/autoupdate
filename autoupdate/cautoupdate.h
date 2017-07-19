@@ -49,6 +49,7 @@ private:
     void removeAllFiles(const QString& strPath);
     void copyAllFiles(const QString& strSrcPath, const QString& strDstPath);
     QString convertFileSize(int size);
+    QString toGbk(const QString& strIn);
 
 private slots:
     void slotTimeout();

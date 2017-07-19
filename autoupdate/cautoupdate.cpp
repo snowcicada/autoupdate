@@ -2,9 +2,11 @@
 #include "ui_cautoupdate.h"
 #include "jsoncpp/CJson.h"
 #include <QCryptographicHash>
+#include <winbase.h>
+#include <windows.h>
 
 #define SET_UPDATE          "config.ini"
-#define APP_TITLE           "华码科技自动更新 v1.1"
+#define APP_TITLE           "华码科技自动更新 v1.2"
 #define APP_NAME            "autoupdate.exe"
 #define PROJECT_MANIFEST    "project.manifest"
 #define TMP_DIR             "tmp"
@@ -17,6 +19,22 @@ CAutoUpdate::CAutoUpdate(QWidget *parent) :
 
     initUi();
     readSettings();
+
+//    HANDLE hMap=CreateFileMappingA((HANDLE)0xffffffff,NULL,
+//                                  PAGE_READWRITE,0,128,"TH_FACER_DEMO");
+//    if (hMap != NULL) {
+//        if (GetLastError() == ERROR_ALREADY_EXISTS) {
+//            CloseHandle(hMap);
+//            hMap = NULL;
+//            qDebug() << "####";
+//        } else {
+//            qDebug() << "aaAAA";
+//        }
+//    }
+
+//    QDir dir = QDir::current();
+//    dir.cdUp();
+//    qDebug() << dir.entryList();
 
 //    createRemoteManifest(m_mapLocalManifest, m_settings.strUpdateDir);
 
@@ -82,7 +100,7 @@ void CAutoUpdate::readSettings()
 
     strKey = "update/update_dir";
     if (set.contains(strKey)) {
-        m_settings.strUpdateDir = set.value(strKey).toString();
+        m_settings.strUpdateDir = toGbk(set.value(strKey).toString());
     } else {
         m_settings.strUpdateDir = "..";
         set.setValue(strKey, m_settings.strUpdateDir);
@@ -90,7 +108,7 @@ void CAutoUpdate::readSettings()
 
     strKey = "update/not_update_dirs";
     if (set.contains(strKey)) {
-        strTmp = set.value(strKey).toString();
+        strTmp = toGbk(set.value(strKey).toString());
         m_settings.strNotUpdateDirList = strTmp.split(';');
     } else {
         strTmp = "id_logs;";
@@ -100,7 +118,7 @@ void CAutoUpdate::readSettings()
 
     strKey = "update/not_update_files";
     if (set.contains(strKey)) {
-        strTmp = set.value(strKey).toString();
+        strTmp = toGbk(set.value(strKey).toString());
         m_settings.strNotUpdateFileList = strTmp.split(';');
     } else {
         strTmp = "cardreadlog.txt;CollectConfig.ini;IDInfoLog.txt;Log.dat;upload.txt;";
@@ -120,7 +138,7 @@ void CAutoUpdate::readSettings()
 
     strKey = "update/app";
     if (set.contains(strKey)) {
-        m_settings.strApp = set.value(strKey).toString();
+        m_settings.strApp = toGbk(set.value(strKey).toString());
     } else {
         m_settings.strApp = "FaceHuaMaWT.exe";
         set.setValue(strKey, m_settings.strApp);
@@ -436,6 +454,15 @@ QString CAutoUpdate::convertFileSize(int size)
     return strSize;
 }
 
+QString CAutoUpdate::toGbk(const QString &strIn)
+{
+    QTextCodec* codec = QTextCodec::codecForLocale();
+    if (codec) {
+        return codec->toUnicode(strIn.toLatin1());
+    }
+    return strIn;
+}
+
 void CAutoUpdate::slotTimeout()
 {
     this->hide();
@@ -498,6 +525,8 @@ void CAutoUpdate::slotTimeout()
 
     //继续开启下一次更新
     m_timer.start(m_settings.nUpdateInterval * 1000);
+
+    this->hide();
 }
 
 void CAutoUpdate::slotActQuit()
