@@ -6,7 +6,7 @@
 #include <windows.h>
 
 #define SET_UPDATE          "config.ini"
-#define APP_TITLE           "华码科技自动更新 v1.2"
+#define APP_TITLE           "华码科技自动更新 v1.3"
 #define APP_NAME            "autoupdate.exe"
 #define PROJECT_MANIFEST    "project.manifest"
 #define TMP_DIR             "tmp"
@@ -530,23 +530,9 @@ void CAutoUpdate::slotTimeout()
 //    strTmp = tr("taskkill /im %1* /f").arg(m_settings.strApp);
 //    QProcess::execute(strTmp);
 
-    //拷贝更新文件
-    copyAllFiles(TMP_DIR, m_settings.strUpdateDir);
+    ui->labelFileName->setText("等待进程退出");
 
-    //启动软件,先切到目标目录启动，再切回去，由于对方的软件含有相对路径操作，所以要这么处理
-    QString strCurrentDir = qApp->applicationDirPath();
-    QDir::setCurrent(m_settings.strUpdateDir + "/");
-    QProcess::startDetached(m_settings.strApp);
-    QDir::setCurrent(strCurrentDir);
-
-    //结束
-    ui->labelFileName->setText("更新完成");
-    m_pSysTrayIcon->showMessage("提示", "更新完成！", QSystemTrayIcon::Information);
-
-    //继续开启下一次更新
-    m_timer.start(m_settings.nUpdateInterval * 1000);
-
-    this->hide();
+    QTimer::singleShot(1000, this, SLOT(slotCheckFileMapRelease()));
 }
 
 void CAutoUpdate::slotActQuit()
@@ -579,5 +565,32 @@ void CAutoUpdate::slotCurlSize(int size)
     m_nSize += size;
     ui->labelSize->setText(convertFileSize(m_nSize));
     QCoreApplication::processEvents();
+}
+
+void CAutoUpdate::slotCheckFileMapRelease()
+{
+    if (isReleaseFileMap()) {
+        //拷贝更新文件
+        copyAllFiles(TMP_DIR, m_settings.strUpdateDir);
+
+        //启动软件,先切到目标目录启动，再切回去，由于对方的软件含有相对路径操作，所以要这么处理
+        QString strCurrentDir = qApp->applicationDirPath();
+        QDir::setCurrent(m_settings.strUpdateDir + "/");
+        QProcess::startDetached(m_settings.strApp);
+        QDir::setCurrent(strCurrentDir);
+
+        //结束
+        ui->labelFileName->setText("更新完成");
+        m_pSysTrayIcon->showMessage("提示", "更新完成！", QSystemTrayIcon::Information);
+
+        //继续开启下一次更新
+        m_timer.start(m_settings.nUpdateInterval * 1000);
+
+        this->hide();
+
+    } else {
+        QTimer::singleShot(1000, this, SLOT(slotCheckFileMapRelease()));
+        return;
+    }
 }
 

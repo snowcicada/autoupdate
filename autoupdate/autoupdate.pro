@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
+QT       += core gui network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -25,7 +25,8 @@ SOURCES += main.cpp\
     jsoncpp/json_internalmap.inl \
     jsoncpp/json_internalarray.inl \
     jsoncpp/CJson.cpp \
-    ccurl.cpp
+    ccurl.cpp \
+    qtsingleapplication.cpp
 
 HEADERS  += cautoupdate.h \
     jsoncpp/writer.h \
@@ -38,7 +39,8 @@ HEADERS  += cautoupdate.h \
     jsoncpp/config.h \
     jsoncpp/CJson.h \
     jsoncpp/autolink.h \
-    ccurl.h
+    ccurl.h \
+    qtsingleapplication.h
 
 FORMS    += cautoupdate.ui
 

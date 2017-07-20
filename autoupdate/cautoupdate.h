@@ -60,6 +60,7 @@ private slots:
     void slotActStop();
     void slotSysTrayIconActivated(QSystemTrayIcon::ActivationReason reason);
     void slotCurlSize(int size);
+    void slotCheckFileMapRelease();
     
 private:
     Ui::CAutoUpdate *ui;
